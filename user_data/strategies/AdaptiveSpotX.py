@@ -128,9 +128,9 @@ class AdaptiveSpotX(IStrategy):
     dca2_trigger = DecimalParameter(-0.25, -0.10, default=-0.14, decimals=2, space="buy", optimize=True, load=True)
 
     # Importi fissi per ogni DCA — in USDC (non percentuale)
-    # Entry: 20 USDC (stake_amount nel config) + DCA1: 25 + DCA2: 30 = 75 USDC max
-    dca1_amount: float = 25.0
-    dca2_amount: float = 30.0
+    # Entry: 20 USDC (stake_amount nel config) + DCA1: 30 + DCA2: 50 = 100 USDC max
+    dca1_amount: float = 30.0
+    dca2_amount: float = 50.0
 
     # =========================================================================
     # FIXED STRATEGY SETTINGS
@@ -339,14 +339,7 @@ class AdaptiveSpotX(IStrategy):
             & (df["close"] >= col("bb_upper_1h", df["close"]) * self.exit_bb_proximity.value)
         )
 
-        ema_cross_down = (
-            (col("ema_20_1h", df["close"])         < col("ema_50_1h", df["close"]))
-            & (col("ema_20_1h", df["close"]).shift(1) >= col("ema_50_1h", df["close"]).shift(1))
-            & (col("rsi_1h", 50) < 50)
-        )
-
-        df.loc[overbought,                  ["exit_long", "exit_tag"]] = [1, "overbought"]
-        df.loc[ema_cross_down & ~overbought, ["exit_long", "exit_tag"]] = [1, "ema_cross_down"]
+        df.loc[overbought, ["exit_long", "exit_tag"]] = [1, "overbought"]
 
         return df
 
