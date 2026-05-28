@@ -1,0 +1,97 @@
+version: '3.9'
+services:
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /home/matteo/portainer-data:/data
+    ports:
+      - 9000:9000
+
+  esphome:
+    container_name: esphome
+    image: esphome/esphome
+    #image: esphome/esphome:dev
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    environment:
+      - "TZ=Europe/Rome"
+    network_mode: host
+    #ports:
+    #  - "6052:6052"
+    #  - "6123:6123"
+    restart: "no"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/home/matteo/esphome:/config"
+#    compile_process_limit: 1 
+
+  tftp:
+    image: wastrachan/tftpd:latest
+    container_name: tftp_server
+    restart: "no"
+    ports:
+    - "69:69/udp"
+    volumes:
+    - /home/matteo/tftp:/data
+
+
+  apache:
+    container_name: apache
+    image: php:apache
+    volumes:
+      - /home/matteo/apache:/var/www/html/
+    ports:
+      - 8001:80
+    restart: "no"
+    #depends_on:
+    #  - mysql-diablo
+    environment:
+      - TZ=Europe/Rome
+
+
+
+  freqtrade:
+    image: freqtradeorg/freqtrade:stable
+    # image: freqtradeorg/freqtrade:develop
+    # Use plotting image
+    # image: freqtradeorg/freqtrade:develop_plot
+    # # Enable GPU Image and GPU Resources (only relevant for freqAI)
+    # # Make sure to uncomment the whole deploy section
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    # Build step - only needed when additional dependencies are needed
+    # build:
+    #   context: .
+    #   dockerfile: "./docker/Dockerfile.custom"
+    restart: "no"
+    container_name: freqtrade
+    environment:
+      - TZ=Europe/Rome
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "./user_data:/freqtrade/user_data"
+    # Expose api on port 8080 (localhost only)
+    # Please read the https://www.freqtrade.io/en/stable/rest-api/ documentation
+    # for more information.
+    ports:
+      - "0.0.0.0:8080:8080"
+    # Default command used when running `docker compose up`
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+      --config /freqtrade/user_data/config_dcaProgressive.json
+      --config /freqtrade/user_data/config_secrets.json
+      --strategy DcaProgressive

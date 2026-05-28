@@ -1,0 +1,165 @@
+//@version=5
+// DcaProgressive — traduzione fedele della strategia freqtrade
+// Parametri già impostati ai valori ottimizzati (hyperopt Gen-Mag 2026)
+//
+// LIMITAZIONI rispetto a freqtrade:
+//   - Le tranche sono calcolate in USDC diviso il prezzo corrente (non ordini fissi)
+//   - Il backtest TradingView usa OHLC, freqtrade usa tick → risultati diversi
+//   - Il cooldown post-chiusura è emulato, non identico al CooldownPeriod freqtrade
+strategy("DcaProgressive", overlay=true, pyramiding=10,
+         default_qty_type=strategy.cash, default_qty_value=6,
+         initial_capital=1000,
+         commission_type=strategy.commission.percent, commission_value=0.1)
+
+// ── Parametri (valori ottimizzati hyperopt) ────────────────────────────────
+rsi_t1       = input.int(41,  "RSI entry tranche 1-3",  minval=25, maxval=45,  group="Entry")
+rsi_t2       = input.int(35,  "RSI entry tranche 4-7",  minval=20, maxval=35,  group="Entry")
+rsi_t3       = input.int(20,  "RSI entry tranche 8-10", minval=15, maxval=28,  group="Entry")
+adx_thresh   = input.int(24,  "ADX soglia",              minval=15, maxval=35,  group="Entry")
+vol_mult     = input.float(1.3,"Vol moltiplicatore",      minval=1.0,maxval=2.5, step=0.1, group="Entry")
+rsi_sell     = input.int(70,  "RSI exit 1h",             minval=55, maxval=80,  group="Exit")
+min_tranches = input.int(4,   "Min tranche per uscita",  minval=2,  maxval=10,  group="Exit")
+
+// ── Indicatori 15m ─────────────────────────────────────────────────────────
+ema_fast = ta.ema(close, 5)
+ema_slow = ta.ema(close, 20)
+ema_long = ta.ema(close, 200)
+rsi      = ta.rsi(close, 14)
+[plus_di, minus_di, adx] = ta.dmi(14, 14)
+vol_ma       = ta.sma(volume, 10)
+body         = math.abs(close - open)
+lower_shadow = math.min(open, close) - low
+
+// ── Indicatori 1h (informative pair) ──────────────────────────────────────
+f_bb_upper() =>
+    [upper, _, _] = ta.bb(close, 20, 2.0)
+    upper
+bb_upper_1h = request.security(syminfo.tickerid, "60", f_bb_upper(),    lookahead=barmerge.lookahead_off)
+rsi_1h      = request.security(syminfo.tickerid, "60", ta.rsi(close,14), lookahead=barmerge.lookahead_off)
+
+// ── Stato posizione ────────────────────────────────────────────────────────
+in_position = strategy.position_size > 0
+
+// ── Segnale ingresso (prima tranche) ──────────────────────────────────────
+above         = close > ema_long
+ema_cross     = ta.crossover(ema_fast, ema_slow)
+momentum_ok   = ema_cross and adx > adx_thresh and plus_di > minus_di and volume > vol_ma * vol_mult
+accumulo_ok   = rsi < rsi_t1 and lower_shadow > body * 1.5 and body > 0
+entry_raw     = (above and momentum_ok) or (not above and accumulo_ok)
+// cooldown 3 barre (uguale a freqtrade)
+recent_entry  = entry_raw[1] or entry_raw[2] or entry_raw[3]
+entry_signal  = entry_raw and not recent_entry
+
+// ── Tracciamento tranche e cooldown post-chiusura ─────────────────────────
+var int tranche_count   = 0
+var int last_entry_bar  = 0
+var int first_entry_bar = 0
+var int last_close_bar  = 0
+
+if not in_position and in_position[1]       // barra di chiusura della posizione
+    last_close_bar := bar_index
+
+if not in_position
+    tranche_count   := 0
+    last_entry_bar  := 0
+    first_entry_bar := 0
+
+// Cooldown 3 barre dopo la chiusura (CooldownPeriod freqtrade)
+post_close_ok  = (bar_index - last_close_bar) >= 3
+// Cooldown 3 barre tra tranche DCA
+inter_dca_ok   = (bar_index - last_entry_bar) >= 3
+
+// ── Soglia RSI per tranche DCA successive ─────────────────────────────────
+next_tranche   = tranche_count + 1
+rsi_thresh_dca = next_tranche <= 3 ? rsi_t1 : next_tranche <= 7 ? rsi_t2 : rsi_t3
+
+// ── Segnale DCA (stessa logica, RSI adattato alla tranche) ─────────────────
+dca_momentum = ema_cross and adx > adx_thresh and plus_di > minus_di and volume > vol_ma * vol_mult
+dca_accumulo = rsi < rsi_thresh_dca and lower_shadow > body * 1.5 and body > 0
+dca_signal   = inter_dca_ok and ((above and dca_momentum) or (not above and dca_accumulo))
+
+// ── Tranche sizes in USDC (6/9/12/15/18/21/24/27/30/33) ───────────────────
+// strategy.cash usa direttamente USDC → nessuna conversione necessaria
+tranche_usd = array.from(6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 30.0, 33.0)
+
+// ── Profitto corrente (include commissioni implicite) ─────────────────────
+current_profit_pct = in_position ?
+     (close - strategy.position_avg_price) / strategy.position_avg_price : na
+
+// ── Condizioni di uscita ───────────────────────────────────────────────────
+// Uscita forzata 10 giorni (960 candele da 15m, crypto 24/7)
+exit_time   = in_position and (bar_index - first_entry_bar) >= 960
+// Uscita normale: min tranche + profitto > 0 + close ≥ BB 1h + RSI 1h > soglia
+exit_normal = in_position and
+              tranche_count >= min_tranches and
+              nz(current_profit_pct, 0) > 0 and
+              close >= bb_upper_1h and
+              rsi_1h > rsi_sell
+
+// ── Esecuzione ordini ──────────────────────────────────────────────────────
+// Prima tranche
+if entry_signal and not in_position and post_close_ok
+    strategy.entry("T1", strategy.long, qty=array.get(tranche_usd, 0))
+    tranche_count   := 1
+    last_entry_bar  := bar_index
+    first_entry_bar := bar_index
+
+// Tranche DCA 2–10
+if in_position and tranche_count >= 1 and tranche_count < 10 and dca_signal
+    idx = tranche_count
+    strategy.entry("T" + str.tostring(idx + 1), strategy.long, qty=array.get(tranche_usd, idx))
+    tranche_count  := idx + 1
+    last_entry_bar := bar_index
+
+// Uscite
+if exit_normal
+    strategy.close_all(comment="dca_exit")
+if exit_time and not exit_normal
+    strategy.close_all(comment="time_exit")
+
+// ── Plot indicatori ────────────────────────────────────────────────────────
+plot(ema_fast,    "EMA 5",    color=color.new(color.blue,   0), linewidth=1)
+plot(ema_slow,    "EMA 20",   color=color.new(color.orange, 0), linewidth=1)
+plot(ema_long,    "EMA 200",  color=color.new(color.red,    0), linewidth=2)
+plot(bb_upper_1h, "BB Up 1h", color=color.new(color.purple, 30), linewidth=1)
+
+// ── Segnali grafici ────────────────────────────────────────────────────────
+plotshape(entry_signal and not in_position and post_close_ok,
+    title="Entry T1", style=shape.triangleup, location=location.belowbar,
+    color=color.green, size=size.small)
+
+plotshape(in_position and dca_signal and tranche_count >= 1 and tranche_count < 10,
+    title="DCA", style=shape.circle, location=location.belowbar,
+    color=color.aqua, size=size.tiny)
+
+plotshape(exit_normal,
+    title="dca_exit", style=shape.triangledown, location=location.abovebar,
+    color=color.red, size=size.small)
+
+plotshape(exit_time and not exit_normal,
+    title="time_exit", style=shape.xcross, location=location.abovebar,
+    color=color.orange, size=size.small)
+
+// ── Info table ─────────────────────────────────────────────────────────────
+var table tbl = table.new(position.top_right, 2, 5,
+    bgcolor=color.new(color.black, 75),
+    border_color=color.gray, border_width=1)
+
+if barstate.islast
+    pnl_color = nz(current_profit_pct, 0) >= 0 ? color.lime : color.red
+    table.cell(tbl, 0, 0, "Regime",    text_color=color.white, text_size=size.small)
+    table.cell(tbl, 1, 0, above ? "Momentum ▲" : "Accumulo ▼",
+               text_color=above ? color.lime : color.yellow, text_size=size.small)
+    table.cell(tbl, 0, 1, "Tranche",   text_color=color.white, text_size=size.small)
+    table.cell(tbl, 1, 1, str.tostring(tranche_count) + " / 10",
+               text_color=color.aqua, text_size=size.small)
+    table.cell(tbl, 0, 2, "Avg price", text_color=color.white, text_size=size.small)
+    table.cell(tbl, 1, 2, in_position ? str.tostring(math.round(strategy.position_avg_price, 5)) : "—",
+               text_color=color.aqua, text_size=size.small)
+    table.cell(tbl, 0, 3, "P&L %",     text_color=color.white, text_size=size.small)
+    table.cell(tbl, 1, 3, in_position ? str.tostring(math.round(nz(current_profit_pct) * 100, 2)) + "%" : "—",
+               text_color=pnl_color, text_size=size.small)
+    table.cell(tbl, 0, 4, "Exit cond", text_color=color.white, text_size=size.small)
+    table.cell(tbl, 1, 4, exit_normal ? "dca_exit ✓" : exit_time ? "time_exit ✓" : "—",
+               text_color=exit_normal ? color.lime : exit_time ? color.orange : color.gray,
+               text_size=size.small)

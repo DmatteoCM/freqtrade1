@@ -1,0 +1,34 @@
+{
+  "strategy_name": "DcaProgressive",
+  "params": {
+    "roi": {
+      "0": 100.0
+    },
+    "stoploss": {
+      "stoploss": -0.99
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 8
+    },
+    "buy": {
+      "adx_thresh": 19,
+      "rsi_t1": 44,
+      "rsi_t2": 35,
+      "rsi_t3": 28,
+      "vol_mult": 1.3
+    },
+    "sell": {
+      "rsi_sell": 72,
+      "trailing_pct": 0.2,
+      "time_exit_loss_threshold": -0.09
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-05-25 15:24:36.275416+00:00"
+}

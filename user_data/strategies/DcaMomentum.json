@@ -1,0 +1,32 @@
+{
+  "strategy_name": "DcaMomentum",
+  "params": {
+    "roi": {
+      "0": 100.0
+    },
+    "stoploss": {
+      "stoploss": -0.99
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "adx_thresh": 21,
+      "rsi_t1": 37,
+      "rsi_t2": 35,
+      "rsi_t3": 19,
+      "vol_mult": 1.9
+    },
+    "sell": {
+      "rsi_sell": 64
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-05-16 23:20:25.180859+00:00"
+}

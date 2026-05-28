@@ -1,0 +1,35 @@
+{
+  "strategy_name": "ema_scalping",
+  "params": {
+    "roi": {
+      "0": 100
+    },
+    "stoploss": {
+      "stoploss": -0.05
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "ema_fast": 9,
+      "ema_slow": 22,
+      "rsi_long_max": 63,
+      "rsi_period": 20,
+      "volume_ma_period": 42,
+      "volume_multiplier": 0.2
+    },
+    "sell": {
+      "rsi_short_min": 44,
+      "trailing_stop_positive_offset_opt": 0.044,
+      "trailing_stop_positive_opt": 0.017
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-05-25 10:50:51.831473+00:00"
+}
