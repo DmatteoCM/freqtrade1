@@ -39,15 +39,11 @@
     "ccxt_async_config": {},
     "pair_whitelist": [
       "BTC/USDC",
-      "ETH/USDC",
-      "BNB/USDC",
+      "XLM/USDC",
       "SOL/USDC",
+      "NEAR/USDC",
       "XRP/USDC",
-      "ADA/USDC",
-      "DOGE/USDC",
-      "AVAX/USDC",
-      "DOT/USDC",
-      "MATIC/USDC"
+      "SUI/USDC"
     ],
     "pair_blacklist": [
       "BNB/.*"

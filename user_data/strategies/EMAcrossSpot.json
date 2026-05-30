@@ -1,0 +1,35 @@
+{
+  "strategy_name": "EMAcrossSpot",
+  "params": {
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "adx_period": 9,
+      "adx_threshold": 24,
+      "ema_fast": 49,
+      "ema_slow": 102,
+      "rsi_long_max": 59,
+      "rsi_period": 14,
+      "volume_ma_period": 44,
+      "volume_multiplier": 0.8
+    },
+    "roi": {
+      "0": 0.161,
+      "28": 0.048,
+      "73": 0.01,
+      "176": 0
+    },
+    "stoploss": {
+      "stoploss": -0.201
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-05-29 23:45:55.442681+00:00"
+}
