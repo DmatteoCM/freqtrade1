@@ -1,0 +1,31 @@
+{
+  "strategy_name": "SimpleDCA",
+  "params": {
+    "roi": {
+      "0": 100
+    },
+    "stoploss": {
+      "stoploss": -0.99
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 1
+    },
+    "buy": {
+      "cooldown_hours": 6,
+      "dca_stake_amount": 10.0,
+      "rsi_bear": 23,
+      "rsi_bull": 30
+    },
+    "sell": {
+      "profit_target_pct": 0.04
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-06-04 21:41:43.357872+00:00"
+}

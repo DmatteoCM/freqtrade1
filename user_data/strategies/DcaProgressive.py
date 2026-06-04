@@ -80,8 +80,12 @@ class DcaProgressive(IStrategy):
     adx_thresh = IntParameter(15, 35, default=20, space="buy", optimize=True)
     vol_mult  = DecimalParameter(1.0, 2.5, default=1.3, decimals=1, space="buy", optimize=True)
     rsi_sell     = IntParameter(55, 80, default=72, space="sell", optimize=True)
-    trailing_pct = DecimalParameter(0.2, 1.0, default=0.2, decimals=1, space="sell", optimize=True)
+    trailing_pct = DecimalParameter(0.1, 3.0, default=0.2, decimals=1, space="sell", optimize=True)
+    btc_ema_ratio = DecimalParameter(0.90, 1.00, default=0.97, decimals=2, space="buy", optimize=True)
+    btc_rsi_min   = IntParameter(20, 50, default=35, space="buy", optimize=True)
     time_exit_loss_threshold = DecimalParameter(-0.10, 0.00, default=-0.09, decimals=2, space="sell", optimize=True)
+    early_exit_min_tranches = IntParameter(3, 9, default=5, space="sell", optimize=True)
+    early_exit_loss = DecimalParameter(-0.25, -0.05, default=-0.12, decimals=2, space="sell", optimize=True)
 
     # ------------------------------------------------------------------ #
     #  Configurazione grafici FreqUI                                      #
@@ -124,7 +128,10 @@ class DcaProgressive(IStrategy):
     #  Informative pairs                                                   #
     # ------------------------------------------------------------------ #
     def informative_pairs(self):
-        return [(pair, self.bb_timeframe) for pair in self.dp.current_whitelist()]
+        pairs = [(pair, self.bb_timeframe) for pair in self.dp.current_whitelist()]
+        btc_pair = f"BTC/{self.config['stake_currency']}"
+        pairs.append((btc_pair, self.bb_timeframe))
+        return pairs
 
     # ------------------------------------------------------------------ #
     #  Indicatori                                                          #
@@ -166,6 +173,18 @@ class DcaProgressive(IStrategy):
                 self.timeframe,
                 self.bb_timeframe,
                 ffill=True,
+            )
+
+        # --- BTC 1h macro filter ---
+        btc_pair = f"BTC/{self.config['stake_currency']}"
+        btc_df = self.dp.get_pair_dataframe(pair=btc_pair, timeframe=self.bb_timeframe)
+        if not btc_df.empty:
+            btc_df["btc_ema20"] = ta.EMA(btc_df["close"], timeperiod=20)
+            btc_df["btc_ema50"] = ta.EMA(btc_df["close"], timeperiod=50)
+            btc_df["btc_rsi"]   = ta.RSI(btc_df["close"], timeperiod=14)
+            btc_df = btc_df[["date", "btc_ema20", "btc_ema50", "btc_rsi"]].copy()
+            dataframe = merge_informative_pair(
+                dataframe, btc_df, self.timeframe, self.bb_timeframe, ffill=True
             )
 
         # Colonna exit_condition per visualizzazione in FreqUI
@@ -214,8 +233,15 @@ class DcaProgressive(IStrategy):
             & (dataframe["body"] > 0)
         )
 
+        btc_ok = pd.Series(True, index=dataframe.index)
+        if "btc_ema20_1h" in dataframe.columns:
+            btc_ok = (
+                (dataframe["btc_ema20_1h"] >= dataframe["btc_ema50_1h"] * self.btc_ema_ratio.value)
+                | (dataframe["btc_rsi_1h"] > self.btc_rsi_min.value)
+            )
+
         entry = (
-            ((above & momentum) | (~above & accumulo)) & (dataframe["volume"] > 0)
+            btc_ok & ((above & momentum) | (~above & accumulo)) & (dataframe["volume"] > 0)
         )
 
         # Cooldown: sopprime il segnale se c'è stato un ingresso nelle ultime cooldown_bars candele
@@ -251,6 +277,11 @@ class DcaProgressive(IStrategy):
         if open_date.tzinfo is None:
             open_date = open_date.replace(tzinfo=timezone.utc)
         age = ct - open_date
+
+        # Uscita anticipata: troppe tranche in perdita profonda
+        if (trade.nr_of_successful_entries >= self.early_exit_min_tranches.value
+                and current_profit < self.early_exit_loss.value):
+            return "early_exit_loss"
 
         # Hard cap a 20 giorni: esce sempre
         if age >= timedelta(days=20):
@@ -326,6 +357,10 @@ class DcaProgressive(IStrategy):
 
         # Non aprire nuove tranche se c'è già un ordine in attesa
         if trade.has_open_orders:
+            return None
+
+        # Blocca DCA se la perdita supera la soglia early_exit (sta per uscire)
+        if current_profit < self.early_exit_loss.value:
             return None
 
         # Cooldown: minimo cooldown_bars candele dall'ultimo riempimento

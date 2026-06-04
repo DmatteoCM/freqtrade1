@@ -1,15 +1,16 @@
 {
-  "max_open_trades": 6,
+  "max_open_trades": 10,
   "stake_currency": "USDC",
-  "stake_amount": 100,
+  "stake_amount": 10,
   "tradable_balance_ratio": 0.99,
   "fiat_display_currency": "EUR",
   "dry_run": true,
-  "dry_run_wallet": 1000,
+  "dry_run_wallet": 3000,
   "cancel_open_orders_on_exit": false,
   "trading_mode": "spot",
   "margin_mode": "",
-  "timeframe": "5m",
+  "timeframe": "1h",
+  "fee": 0.00075,
   "unfilledtimeout": {
     "entry": 10,
     "exit": 10,
@@ -39,11 +40,15 @@
     "ccxt_async_config": {},
     "pair_whitelist": [
       "BTC/USDC",
-      "XLM/USDC",
+      "ETH/USDC",
       "SOL/USDC",
-      "NEAR/USDC",
       "XRP/USDC",
-      "SUI/USDC"
+      "DOGE/USDC",
+      "ADA/USDC",
+      "AVAX/USDC",
+      "DOT/USDC",
+      "LINK/USDC",
+      "LTC/USDC"
     ],
     "pair_blacklist": [
       "BNB/.*"
@@ -65,8 +70,7 @@
     "username": "admin",
     "password": "MD@bitcoin!2020"
   },
-  "fee": 0.00075,
-  "bot_name": "freqtrade",
+  "bot_name": "SimpleDCA",
   "initial_state": "running",
   "force_entry_enable": false,
   "internals": {
